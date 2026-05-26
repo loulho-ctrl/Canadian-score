@@ -171,8 +171,9 @@ function activerNotifications() {
     status.innerText = "Connexion en direct à la NHL...";
     status.style.color = "#248a3d";
 
-    annoncerTexte("Notifications activées. Connexion au match en cours.");
+    annoncerTexte("Notifications activées. Prêt pour les tests ou le direct.");
 
+    // Tente de vérifier le match
     verifierLeMatch();
     intervalleMatch = setInterval(verifierLeMatch, 15000);
 }
@@ -182,7 +183,6 @@ function verifierLeMatch() {
     
     fetch(`https://api-web.nhle.com/v1/gamecenter/${ID_MATCH}/landing`)
         .then(res => {
-            // Si la réponse de la NHL n'est pas 200 (OK), on force une erreur claire
             if (!res.ok) {
                 throw new Error(`Code HTTP ${res.status} (${res.statusText})`);
             }
@@ -191,8 +191,8 @@ function verifierLeMatch() {
         .then(data => {
             const estAdomicile = (data.homeTeam.abbrev === "MTL");
             
-            const nouveauxButsMTL = estAdomicile ? data.homeTeam.score : data.awayTeam.score;
-            const nouveauxButsADV = estAdomicile ? data.awayTeam.score : data.homeTeam.score;
+            const nouveauxButsMTL = data.homeTeam.score !== undefined ? (estAdomicile ? data.homeTeam.score : data.awayTeam.score) : 0;
+            const nouveauxButsADV = data.awayTeam.score !== undefined ? (estAdomicile ? data.awayTeam.score : data.homeTeam.score) : 0;
             
             document.getElementById('nomAdversaireHTML').innerText = estAdomicile ? data.awayTeam.abbrev : data.homeTeam.abbrev;
 
@@ -213,4 +213,59 @@ function verifierLeMatch() {
             if (nouveauxButsMTL > scoreButsMTL) {
                 scoreButsMTL = nouveauxButsMTL;
                 document.getElementById('scoreMTL').innerText = scoreButsMTL;
-                annoncerTexte(`Et le but ! Le score est maintenant
+                annoncerTexte(`Et le but ! Le score est maintenant de Montréal ${scoreButsMTL}, ${nomAdversaire} ${scoreButsAdversaire}.`);
+            }
+            
+            // Détection But Adversaire
+            if (nouveauxButsADV > scoreButsAdversaire) {
+                scoreButsAdversaire = nouveauxButsADV;
+                document.getElementById('scoreADV').innerText = scoreButsAdversaire;
+                annoncerTexte(`But pour la Caroline. Le score est maintenant de Montréal ${scoreButsMTL}, ${nomAdversaire} ${scoreButsAdversaire}.`);
+            }
+        })
+        .catch(err => {
+            console.error("Erreur NHL récupérée sans bloquer :", err);
+            
+            // On désactive la boucle de recherche automatique pour ne pas surcharger ou faire bugger la page
+            if (intervalleMatch) {
+                clearInterval(intervalleMatch);
+                intervalleMatch = null;
+            }
+            
+            // On affiche gentiment l'erreur tout en disant à l'utilisateur qu'il peut utiliser la simulation manuelle
+            const status = document.getElementById('statusTxt');
+            status.innerText = `L'API NHL bloque (${err.message}). Mode manuel activé, utilisez les boutons du bas !`;
+            status.style.color = "#e67e22"; // Orange d'avertissement
+        });
+}
+
+function annoncerTexte(texte) {
+    if (!audioAutorise) return;
+    window.speechSynthesis.cancel(); 
+    const utterance = new SpeechSynthesisUtterance(texte);
+    utterance.lang = 'fr-CA'; 
+    window.speechSynthesis.speak(utterance);
+}
+
+function simulerButMtl() {
+    // Si l'audio n'est pas activé en haut, on force son activation au premier clic de test
+    if (!audioAutorise) {
+        activerNotifications();
+    }
+    scoreButsMTL++;
+    document.getElementById('scoreMTL').innerText = scoreButsMTL;
+    annoncerTexte(`Et le but ! Le score est maintenant de Montréal ${scoreButsMTL}, ${nomAdversaire} ${scoreButsAdversaire}.`);
+}
+
+function simulerButAdv() {
+    if (!audioAutorise) {
+        activerNotifications();
+    }
+    scoreButsAdversaire++;
+    document.getElementById('scoreADV').innerText = scoreButsAdversaire;
+    annoncerTexte(`But pour la Caroline. Le score est maintenant de Montréal ${scoreButsMTL}, ${nomAdversaire} ${scoreButsAdversaire}.`);
+}
+</script>
+
+</body>
+</html>
