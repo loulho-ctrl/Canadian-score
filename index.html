@@ -88,7 +88,7 @@
         .status {
             margin-top: 15px;
             font-size: 0.85rem;
-            color: #888;
+            color: #e67e22;
             padding: 0 10px;
             word-break: break-word;
         }
@@ -114,3 +114,154 @@
             h1 { font-size: 1.3rem; }
         }
     </style>
+</head>
+<body>
+
+<div class="container">
+    <h1>Canadiens vs Hurricanes 🏒</h1>
+    
+    <button id="btnAudio" class="btn-audio" onclick="activerNotifications()">
+        Activer les notifications vocales
+    </button>
+    <p id="statusTxt" class="status">Le son est bloqué. Touchez/Cliquez pour l'activer.</p>
+
+    <div class="scoreboard">
+        <div class="team-container">
+            <div class="team-name">MTL</div>
+            <img src="logo_canadiens.png" alt="Logo Canadiens" class="team-logo">
+            <div id="scoreMTL" class="score">0</div>
+        </div>
+
+        <div class="vs-divider">VS</div>
+
+        <div class="team-container">
+            <div id="nomAdversaireHTML" class="team-name">CAR</div>
+            <img src="logo_hurricanes.png" alt="Logo Hurricanes" class="team-logo">
+            <div id="scoreADV" class="score">0</div>
+        </div>
+    </div>
+
+    <div class="test-zone">
+        <p style="color: #888; font-size: 0.8rem;">Contrôle manuel (Actif en tout temps) :</p>
+        <button class="btn-test" style="background: #248a3d;" onclick="simulerButMtl()">+1 MTL 🚨</button>
+        <button class="btn-test" style="background: #a6192e;" onclick="simulerButAdv()">+1 CAR 🚨</button>
+    </div>
+</div>
+
+<script>
+let scoreButsMTL = 0;
+let scoreButsAdversaire = 0;
+let nomAdversaire = "les Hurricanes";
+let audioAutorise = false;
+let intervalleMatch = null;
+
+// ID temporaire du match
+const ID_MATCH = "2025030315"; 
+
+function activerNotifications() {
+    if (audioAutorise) return; 
+    audioAutorise = true;
+    
+    const btn = document.getElementById('btnAudio');
+    btn.innerText = "🔊 Notifications Actives";
+    btn.classList.add('active');
+    
+    document.getElementById('statusTxt').innerText = "Système audio paré. Mode hybride activé !";
+    document.getElementById('statusTxt').style.color = "#248a3d";
+
+    annoncerTexte("Notifications activées.");
+
+    // Lancer la boucle réseau de manière sécurisée
+    verifierLeMatch();
+    intervalleMatch = setInterval(verifierLeMatch, 25000); 
+}
+
+function verifierLeMatch() {
+    const urlCible = `https://api-web.nhle.com/v1/gamecenter/${ID_MATCH}/landing`;
+    
+    fetch(`https://api.allorigins.win/get?url=${encodeURIComponent(urlCible)}`)
+        .then(res => {
+            if (!res.ok) throw new Error("Erreur de liaison proxy");
+            return res.json();
+        })
+        .then(wrapper => {
+            // Sécurité : On vérifie si le contenu renvoyé est valide avant de le parser
+            if (!wrapper || !wrapper.contents) {
+                throw new Error("Données distantes vides");
+            }
+            
+            try {
+                const data = JSON.parse(wrapper.contents);
+                
+                if (!data || !data.homeTeam) {
+                    throw new Error("Structure de match non trouvée");
+                }
+
+                const estAdomicile = (data.homeTeam.abbrev === "MTL");
+                const nouveauxButsMTL = estAdomicile ? data.homeTeam.score : data.awayTeam.score;
+                const nouveauxButsADV = estAdomicile ? data.awayTeam.score : data.homeTeam.score;
+                
+                document.getElementById('nomAdversaireHTML').innerText = estAdomicile ? data.awayTeam.abbrev : data.homeTeam.abbrev;
+
+                const estPremierChargement = (scoreButsMTL === 0 && scoreButsAdversaire === 0 && document.getElementById('scoreMTL').innerText === "0");
+
+                if (estPremierChargement) {
+                    scoreButsMTL = nouveauxButsMTL;
+                    scoreButsAdversaire = nouveauxButsADV;
+                    document.getElementById('scoreMTL').innerText = scoreButsMTL;
+                    document.getElementById('scoreADV').innerText = scoreButsAdversaire;
+                    document.getElementById('statusTxt').innerText = "Synchronisé avec l'API !";
+                    document.getElementById('statusTxt').style.color = "#248a3d";
+                    return; 
+                }
+
+                if (nouveauxButsMTL > scoreButsMTL) {
+                    scoreButsMTL = nouveauxButsMTL;
+                    document.getElementById('scoreMTL').innerText = scoreButsMTL;
+                    annoncerTexte(`Et le but ! Le score est maintenant de Montréal ${scoreButsMTL}, ${nomAdversaire} ${scoreButsAdversaire}.`);
+                }
+                
+                if (nouveauxButsADV > scoreButsAdversaire) {
+                    scoreButsAdversaire = nouveauxButsADV;
+                    document.getElementById('scoreADV').innerText = scoreButsAdversaire;
+                    annoncerTexte(`But pour la Caroline. Le score est maintenant de Montréal ${scoreButsMTL}, ${nomAdversaire} ${scoreButsAdversaire}.`);
+                }
+            } catch (e) {
+                // Si l'ID du match n'est pas bon dans l'API, on gère l'erreur silencieusement ici
+                throw new Error("Match inactif sur l'API");
+            }
+        })
+        .catch(err => {
+            console.log("Mode autonome actif :", err.message);
+            // On bascule sur un affichage propre qui ne bloque pas l'interface
+            const status = document.getElementById('statusTxt');
+            status.innerText = "Mode autonome : Prêt à recevoir les buts manuellement !";
+            status.style.color = "#888";
+        });
+}
+
+function annoncerTexte(texte) {
+    if (!audioAutorise) return;
+    window.speechSynthesis.cancel(); 
+    const utterance = new SpeechSynthesisUtterance(texte);
+    utterance.lang = 'fr-CA'; 
+    window.speechSynthesis.speak(utterance);
+}
+
+function simulerButMtl() {
+    if (!audioAutorise) { activerNotifications(); }
+    scoreButsMTL++;
+    document.getElementById('scoreMTL').innerText = scoreButsMTL;
+    annoncerTexte(`Et le but ! Le score est maintenant de Montréal ${scoreButsMTL}, ${nomAdversaire} ${scoreButsAdversaire}.`);
+}
+
+function simulerButAdv() {
+    if (!audioAutorise) { activerNotifications(); }
+    scoreButsAdversaire++;
+    document.getElementById('scoreADV').innerText = scoreButsAdversaire;
+    annoncerTexte(`But pour la Caroline. Le score est maintenant de Montréal ${scoreButsMTL}, ${nomAdversaire} ${scoreButsAdversaire}.`);
+}
+</script>
+
+</body>
+</html>
