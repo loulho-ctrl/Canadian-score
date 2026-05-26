@@ -76,4 +76,141 @@
             width: 100%;
             max-width: 350px;
             transition: background 0.2s, transform 0.1s;
-            box-shadow: 0 5px 1
+            box-shadow: 0 5px 15px rgba(166, 25, 46, 0.4);
+        }
+        .btn-audio:hover { background-color: #c12439; }
+        .btn-audio:active { transform: scale(0.98); }
+        .btn-audio.active {
+            background-color: #248a3d;
+            box-shadow: 0 5px 15px rgba(36, 138, 61, 0.4);
+            cursor: default;
+        }
+        .status {
+            margin-top: 15px;
+            font-size: 0.85rem;
+            color: #888;
+            padding: 0 10px;
+            word-break: break-word;
+        }
+
+        /* Mode de test en bas de page */
+        .test-zone {
+            margin-top: 30px; 
+            border-top: 1px dashed #444; 
+            padding-top: 20px;
+        }
+        .btn-test {
+            color: white; 
+            border: none; 
+            padding: 10px 15px; 
+            margin: 5px; 
+            border-radius: 5px; 
+            cursor: pointer;
+            font-weight: bold;
+        }
+
+        @media (max-width: 400px) {
+            .score { font-size: 2.5rem; }
+            .team-name { font-size: 1rem; }
+            h1 { font-size: 1.3rem; }
+        }
+    </style>
+</head>
+<body>
+
+<div class="container">
+    <h1>Canadiens vs Hurricanes 🏒</h1>
+    
+    <button id="btnAudio" class="btn-audio" onclick="activerNotifications()">
+        Activer les notifications vocales
+    </button>
+    <p id="statusTxt" class="status">Le son est bloqué. Touchez/Cliquez pour l'activer.</p>
+
+    <div class="scoreboard">
+        <div class="team-container">
+            <div class="team-name">MTL</div>
+            <img src="logo_canadiens.png" alt="Logo Canadiens" class="team-logo">
+            <div id="scoreMTL" class="score">0</div>
+        </div>
+
+        <div class="vs-divider">VS</div>
+
+        <div class="team-container">
+            <div id="nomAdversaireHTML" class="team-name">CAR</div>
+            <img src="logo_hurricanes.png" alt="Logo Hurricanes" class="team-logo">
+            <div id="scoreADV" class="score">0</div>
+        </div>
+    </div>
+
+    <div class="test-zone">
+        <p style="color: #888; font-size: 0.8rem;">Zone de Test manuelle :</p>
+        <button class="btn-test" style="background: #248a3d;" onclick="simulerButMtl()">+1 MTL 🚨</button>
+        <button class="btn-test" style="background: #a6192e;" onclick="simulerButAdv()">+1 CAR 🚨</button>
+    </div>
+</div>
+
+<script>
+let scoreButsMTL = 0;
+let scoreButsAdversaire = 0;
+let nomAdversaire = "les Hurricanes";
+let audioAutorise = false;
+let intervalleMatch = null;
+
+// ID du match de la NHL
+const ID_MATCH = "2025030315"; 
+
+function activerNotifications() {
+    if (audioAutorise) return; 
+    audioAutorise = true;
+    
+    const btn = document.getElementById('btnAudio');
+    btn.innerText = "🔊 Notifications Actives";
+    btn.classList.add('active');
+    
+    const status = document.getElementById('statusTxt');
+    status.innerText = "Connexion en direct à la NHL...";
+    status.style.color = "#248a3d";
+
+    annoncerTexte("Notifications activées. Connexion au match en cours.");
+
+    verifierLeMatch();
+    intervalleMatch = setInterval(verifierLeMatch, 15000);
+}
+
+function verifierLeMatch() {
+    console.log("Tentative de récupération du score...");
+    
+    fetch(`https://api-web.nhle.com/v1/gamecenter/${ID_MATCH}/landing`)
+        .then(res => {
+            // Si la réponse de la NHL n'est pas 200 (OK), on force une erreur claire
+            if (!res.ok) {
+                throw new Error(`Code HTTP ${res.status} (${res.statusText})`);
+            }
+            return res.json();
+        })
+        .then(data => {
+            const estAdomicile = (data.homeTeam.abbrev === "MTL");
+            
+            const nouveauxButsMTL = estAdomicile ? data.homeTeam.score : data.awayTeam.score;
+            const nouveauxButsADV = estAdomicile ? data.awayTeam.score : data.homeTeam.score;
+            
+            document.getElementById('nomAdversaireHTML').innerText = estAdomicile ? data.awayTeam.abbrev : data.homeTeam.abbrev;
+
+            // Détection du tout premier chargement réussi
+            const estPremierChargement = (scoreButsMTL === 0 && scoreButsAdversaire === 0 && document.getElementById('scoreMTL').innerText === "0");
+
+            if (estPremierChargement) {
+                scoreButsMTL = nouveauxButsMTL;
+                scoreButsAdversaire = nouveauxButsADV;
+                document.getElementById('scoreMTL').innerText = scoreButsMTL;
+                document.getElementById('scoreADV').innerText = scoreButsAdversaire;
+                document.getElementById('statusTxt').innerText = "Score synchronisé en direct !";
+                document.getElementById('statusTxt').style.color = "#248a3d";
+                return; 
+            }
+
+            // Détection But CH
+            if (nouveauxButsMTL > scoreButsMTL) {
+                scoreButsMTL = nouveauxButsMTL;
+                document.getElementById('scoreMTL').innerText = scoreButsMTL;
+                annoncerTexte(`Et le but ! Le score est maintenant
